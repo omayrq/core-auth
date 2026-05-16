@@ -1,11 +1,19 @@
 import pytest
-import pytest_asyncio
 import httpx
+from sqlalchemy.ext.asyncio import create_async_engine
+from app.database import Base
 from app.main import app
+import os
 
 
 @pytest.mark.asyncio
 async def test_full_auth_flow():
+    # Create tables before testing
+    DATABASE_URL = os.environ.get("DATABASE_URL")
+    engine = create_async_engine(DATABASE_URL, echo=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
     async with httpx.AsyncClient(
         transport=httpx.ASGITransport(app=app),
         base_url="http://test"
@@ -55,8 +63,10 @@ async def test_full_auth_flow():
         assert r.status_code == 200, f"Logout failed: {r.text}"
         assert r.json()["detail"] == "Logout successful"
 
-        # Test 6: Zero-trust — blacklisted token must be rejected
+        # Test 6: Zero-trust check
         r = await client.get("/me", headers={
             "Authorization": f"Bearer {new_access_token}"
         })
         assert r.status_code == 401, f"Blacklist check failed: {r.text}"
+
+    await engine.dispose()
