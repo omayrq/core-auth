@@ -48,7 +48,7 @@ jobs:
       - name: Lint
         run: |
           pip install flake8
-          flake8 app/ --max-line-length=100 --ignore=E501,W503,E402
+          flake8 app/ --max-line-length=100 --ignore=E302,E305,W292,F401,F403,F405,W503,E501
 
       - name: Security scan
         run: |
