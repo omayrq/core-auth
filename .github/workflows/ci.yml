@@ -1,0 +1,65 @@
+name: Core-Auth CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: coreauth
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint
+        run: |
+          pip install flake8
+          flake8 app/ --max-line-length=100 --ignore=E501,W503
+
+      - name: Security scan
+        run: |
+          pip install bandit
+          bandit -r app/ -ll
+
+      - name: Run tests
+        env:
+          DATABASE_URL: postgresql+asyncpg://postgres:password@localhost:5432/coreauth
+          REDIS_URL: redis://localhost:6379
+          ACCESS_SECRET: ci-access-secret-key-for-testing
+          REFRESH_SECRET: ci-refresh-secret-key-for-testing
+          ACCESS_TOKEN_EXPIRE_MINUTES: 15
+          REFRESH_TOKEN_EXPIRE_DAYS: 7
+        run: |
+          pip install pytest pytest-asyncio httpx
+          pytest tests/ -v
